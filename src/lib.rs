@@ -1,6 +1,7 @@
 #![feature(iter_array_chunks, lint_reasons, array_try_map)]
 #![warn(clippy::pedantic)]
 #![allow(clippy::transmute_ptr_to_ptr, reason = "imo transmutes are more readable")]
+#![allow(clippy::missing_errors_doc, clippy::result_unit_err, reason = "This is practically a binary, so I don't want to deal with err handling too much right now")]
 
 use core::{
 	borrow::Borrow,
@@ -335,7 +336,6 @@ impl OwnedDNA {
 	#[must_use]
 	pub fn as_slice(&self) -> &NucleotideSlice { self }
 
-	#[must_use]
 	pub fn try_to_byte_str(&self) -> Result<String, ()> {
 		if self.size > u8::MAX as usize {
 			return Err(())
@@ -346,13 +346,12 @@ impl OwnedDNA {
 		s.push_str(&format!("{:X}", self.size));
 
 		for pack in self.pack_iter() {
-			s.push_str(&format!("{:X}", pack.inner))
+			s.push_str(&format!("{:X}", pack.inner));
 		}
 
 		Ok(s)
 	}
 
-	#[must_use]
 	pub fn try_from_byte_str(s: &str) -> Result<Self, DNAParseError> {
 		if s.len() < 2 {
 			return Err(DNAParseError::Empty)
