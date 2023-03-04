@@ -15,10 +15,11 @@ jobs:
         with:
           toolchain: nightly
           override: true
-          components: cargo, miri, clippy
+          components: cargo, miri, clippy, rustfmt, rust-src
 
+      - run: cargo fmt --check
+      - run: cargo clippy -- -D warnings
       - run: cargo build
-      - run: cargo clippy -- -Dwarnings
       - run: cargo test
       - run: cargo miri setup
       - run: cargo miri test

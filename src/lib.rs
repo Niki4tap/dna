@@ -491,7 +491,10 @@ mod tests {
 	fn pack_index() {
 		let pack = NucleotidePack::from(0b_00_01_10_11);
 
-		assert_eq!([pack.index(0), pack.index(1), pack.index(2), pack.index(3)], pack.to_array())
+		assert_eq!(
+			[pack.index(0), pack.index(1), pack.index(2), pack.index(3)],
+			pack.to_array()
+		)
 	}
 
 	#[test]
