@@ -1,7 +1,12 @@
 #![feature(iter_array_chunks, lint_reasons, array_try_map)]
 #![warn(clippy::pedantic)]
 #![allow(clippy::transmute_ptr_to_ptr, reason = "imo transmutes are more readable")]
-#![allow(clippy::missing_errors_doc, clippy::result_unit_err, reason = "This is practically a binary, so I don't want to deal with err handling too much right now")]
+#![allow(
+	clippy::missing_panics_doc,
+	clippy::missing_errors_doc,
+	clippy::result_unit_err,
+	reason = "This is practically a binary, so I don't want to deal with err handling too much right now"
+)]
 
 use core::{
 	borrow::Borrow,
@@ -156,6 +161,24 @@ pub struct NucleotidePack {
 impl NucleotidePack {
 	#[must_use]
 	pub fn to_array(&self) -> [Nucleotide; 4] { (*self).into() }
+
+	#[must_use]
+	pub fn index(&self, index: u8) -> Nucleotide {
+		assert!(
+			index < 4,
+			"index out of bounds: `NucleotidePack` contains only 4 values, but the index is {index}"
+		);
+
+		let out = match index {
+			0 => self.inner >> 6,
+			1 => (self.inner >> 4) & 0b00_00_00_11,
+			2 => (self.inner >> 2) & 0b00_00_00_11,
+			3 => self.inner & 0b00_00_00_11,
+			_ => unreachable!()
+		};
+
+		unsafe { transmute(out) }
+	}
 }
 
 impl Display for NucleotidePack {
@@ -189,27 +212,6 @@ impl From<u8> for NucleotidePack {
 	fn from(value: u8) -> Self { Self { inner: value } }
 }
 
-impl Index<u8> for NucleotidePack {
-	type Output = Nucleotide;
-
-	fn index(&self, index: u8) -> &Self::Output {
-		assert!(
-			index < 4,
-			"index out of bounds: `NucleotidePack` contains only 4 values, but the index is {index}"
-		);
-
-		let out = match index {
-			0 => self.inner >> 6,
-			1 => (self.inner >> 4) & 0b00_00_00_11,
-			2 => (self.inner >> 2) & 0b00_00_00_11,
-			3 => self.inner & 0b00_00_00_11,
-			_ => unreachable!()
-		};
-
-		unsafe { transmute(&out) }
-	}
-}
-
 pub struct NucleotideSlice {
 	bytes: [u8]
 }
@@ -236,20 +238,10 @@ impl DNA {
 			dna:    self
 		}
 	}
-}
 
-impl AsRef<DNA> for [u8] {
-	fn as_ref(&self) -> &DNA { unsafe { transmute(self) } }
-}
-
-impl<'a> From<&'a [u8]> for &'a DNA {
-	fn from(value: &'a [u8]) -> Self { value.as_ref() }
-}
-
-impl Index<(usize, usize)> for DNA {
-	type Output = Nucleotide;
-
-	fn index(&self, (index, size): (usize, usize)) -> &Self::Output {
+	// We need `IndexGet` :(
+	#[must_use]
+	fn index(&self, index: usize, size: usize) -> Nucleotide {
 		assert!(
 			size > index,
 			"index out of bounds: the len is {size}, but the index is {index}"
@@ -260,8 +252,16 @@ impl Index<(usize, usize)> for DNA {
 		let pack: &NucleotidePack = unsafe { transmute(self.bytes.index(pack_idx)) };
 
 		#[allow(clippy::cast_possible_truncation, reason = "this should never truncate")]
-		&pack[(index % 4) as u8]
+		pack.index((index % 4) as u8)
 	}
+}
+
+impl AsRef<DNA> for [u8] {
+	fn as_ref(&self) -> &DNA { unsafe { transmute(self) } }
+}
+
+impl<'a> From<&'a [u8]> for &'a DNA {
+	fn from(value: &'a [u8]) -> Self { value.as_ref() }
 }
 
 pub struct NucleotideIterator<'a> {
@@ -278,7 +278,7 @@ impl Iterator for NucleotideIterator<'_> {
 			return None
 		}
 
-		let tmp = self.dna[(self.offset, self.size)];
+		let tmp = self.dna.index(self.offset, self.size);
 
 		self.offset += 1;
 
@@ -491,7 +491,7 @@ mod tests {
 	fn pack_index() {
 		let pack = NucleotidePack::from(0b_00_01_10_11);
 
-		assert_eq!([pack[0], pack[1], pack[2], pack[3]], pack.to_array())
+		assert_eq!([pack.index(0), pack.index(1), pack.index(2), pack.index(3)], pack.to_array())
 	}
 
 	#[test]
@@ -509,7 +509,7 @@ mod tests {
 	fn slice_index() {
 		let dna = dna![0b00_00_00_11];
 
-		assert_eq!(dna.as_slice()[(3, 4)], Nucleotide::Thymine);
+		assert_eq!(dna.as_slice().index(3, 4), Nucleotide::Thymine);
 	}
 
 	#[test]
